@@ -36,7 +36,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist "node_modules" (
+if not exist "node_modules\@narezchik\shared\src\index.ts" (
   echo Ставлю npm зависимости...
   call npm install
   if errorlevel 1 (

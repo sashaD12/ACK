@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Политика конфиденциальности — Нарезачка</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #09090b;
+        color: #fafafa;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 48px 20px;
+      }
+      a {
+        color: #fbbf24;
+      }
+      nav {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 32px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav>
+        <a href="./index.html">Главная</a>
+        <a href="./terms.html">Условия</a>
+        <a href="./privacy.html">Конфиденциальность</a>
+      </nav>
+      <h1>Политика конфиденциальности</h1>
+      <p>Дата обновления: 16 октября 2026.</p>
+      <h2>1. Какие данные обрабатываются</h2>
+      <p>
+        Видео, транскрипты и готовые клипы хранятся локально на компьютере
+        пользователя в папке data приложения. Мы не собираем аналитику и не
+        отправляем файлы на свой сервер.
+      </p>
+      <h2>2. Сторонние сервисы</h2>
+      <p>
+        Если пользователь подключает публикацию, приложение запрашивает доступ к
+        YouTube Data API и TikTok Content Posting API. Токены сохраняются локально
+        в data/auth. Обработка данных этими платформами регулируется их политиками:
+      </p>
+      <ul>
+        <li>
+          <a href="https://policies.google.com/privacy">Политика Google</a>
+        </li>
+        <li>
+          <a href="https://www.tiktok.com/legal/privacy-policy">Политика TikTok</a>
+        </li>
+      </ul>
+      <h2>3. Локальные модели</h2>
+      <p>
+        Распознавание речи и подбор текстов могут использовать локальные модели
+        (Whisper, Ollama) на устройстве пользователя. Аудио не передается нам.
+      </p>
+      <h2>4. Хранение и удаление</h2>
+      <p>
+        Пользователь может удалить папку data и отозвать доступ в настройках
+        Google и TikTok. После удаления токенов публикация из приложения
+        прекращается.
+      </p>
+      <h2>5. Контакт</h2>
+      <p>
+        Вопросы по данным:
+        <a href="https://github.com/sashaD12/ACK">github.com/sashaD12/ACK</a>.
+      </p>
+    </main>
+  </body>
+</html>

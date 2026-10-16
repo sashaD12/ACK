@@ -1,0 +1,20 @@
+{
+  "name": "narezchik",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "concurrently -n web,api,worker -c cyan,green,magenta \"npm run dev -w @narezchik/web\" \"npm run dev -w @narezchik/api\" \"npm run worker\"",
+    "dev:web": "npm run dev -w @narezchik/web",
+    "dev:api": "npm run dev -w @narezchik/api",
+    "worker": "python apps/worker/main.py",
+    "worker:install": "python -m pip install -r apps/worker/requirements.txt",
+    "build": "npm run build -w @narezchik/web && npm run build -w @narezchik/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

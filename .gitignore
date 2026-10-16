@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+data
+*.pyc
+__pycache__
+.venv
+venv
+apps/worker/.venv
+.DS_Store
+*.log
+.python-version

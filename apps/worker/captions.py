@@ -42,8 +42,34 @@ def words_in_range(
     return selected
 
 
-def write_ass(path: Path, words: list[dict[str, Any]]) -> None:
-    header = """[Script Info]
+def wrap_hook(text: str, width: int = 26) -> str:
+    words = [token for token in text.split() if token]
+    if not words:
+        return ""
+    lines: list[str] = []
+    current = words[0]
+    for word in words[1:]:
+        trial = f"{current} {word}"
+        if len(trial) <= width:
+            current = trial
+            continue
+        lines.append(current)
+        current = word
+        if len(lines) >= 2:
+            break
+    if current and len(lines) < 2:
+        lines.append(current)
+    return r"\N".join(escape_ass(line) for line in lines[:2])
+
+
+def write_ass(
+    path: Path,
+    words: list[dict[str, Any]],
+    hook: str | None = None,
+    margin_v: int = 260,
+) -> None:
+    safe_margin = max(180, min(560, int(margin_v)))
+    header = f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
@@ -52,12 +78,18 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial Black,72,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,0,2,50,50,260,1
+Style: Default,Arial Black,72,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,6,0,2,50,50,{safe_margin},1
+Style: Hook,Arial Black,62,&H0000E5FF,&H000000FF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,0,8,70,70,90,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
+    hook_text = wrap_hook(str(hook or "").strip())
+    if hook_text:
+        lines.append(
+            f"Dialogue: 1,{ass_time(0)},{ass_time(2.7)},Hook,,0,0,0,,{{\\fad(90,220)}}{hook_text}\n"
+        )
     if not words:
         path.write_text("".join(lines), encoding="utf-8")
         return

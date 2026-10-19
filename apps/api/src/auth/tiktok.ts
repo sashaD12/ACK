@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { config, paths } from "../config.ts";
 import {
@@ -7,7 +8,34 @@ import {
   type TiktokTokens,
 } from "./tokens.ts";
 
-const TIKTOK_SCOPES = ["user.info.basic", "video.upload", "video.publish"];
+const TIKTOK_SCOPES = ["user.info.basic", "video.upload"];
+
+interface TiktokPkcePending {
+  state: string;
+  codeVerifier: string;
+}
+
+function createPkce(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("hex");
+  return { codeVerifier, codeChallenge };
+}
+
+function toFormBody(fields: Record<string, string>): string {
+  return Object.entries(fields)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
+function tiktokErrorText(data: TiktokTokenResponse): string {
+  if (typeof data.error === "string" && data.error.length > 0) {
+    if (data.error_description) {
+      return `${data.error}: ${data.error_description}`;
+    }
+    return data.error;
+  }
+  return "TikTok token exchange failed";
+}
 
 interface TiktokTokenResponse {
   access_token?: string;
@@ -35,7 +63,7 @@ export async function getTiktokTokens(): Promise<TiktokTokens | null> {
 }
 
 async function refreshTiktokTokens(refreshToken: string): Promise<TiktokTokens | null> {
-  const body = new URLSearchParams({
+  const body = toFormBody({
     client_key: config.tiktokClientKey,
     client_secret: config.tiktokClientSecret,
     grant_type: "refresh_token",
@@ -81,13 +109,18 @@ export function registerTiktokAuth(app: FastifyInstance): void {
         error: "TikTok OAuth is not configured. Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET.",
       });
     }
-    const csrf = crypto.randomUUID();
+    const { codeVerifier, codeChallenge } = createPkce();
+    const state = crypto.randomUUID();
+    const pending: TiktokPkcePending = { state, codeVerifier };
+    await writeJsonFile(paths.tiktokPkceFile, pending);
     const params = new URLSearchParams({
       client_key: config.tiktokClientKey,
       redirect_uri: config.tiktokRedirectUri,
       response_type: "code",
       scope: TIKTOK_SCOPES.join(","),
-      state: csrf,
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
     });
     return reply.redirect(
       `https://www.tiktok.com/v2/auth/authorize/?${params.toString()}`
@@ -97,16 +130,25 @@ export function registerTiktokAuth(app: FastifyInstance): void {
   app.get(
     "/api/auth/tiktok/callback",
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const query = request.query as { code?: string; error?: string };
-      if (query.error || !query.code) {
+      const query = request.query as { code?: string; error?: string; state?: string };
+      const pending = await readJsonFile<TiktokPkcePending>(paths.tiktokPkceFile);
+      await deleteFileIfExists(paths.tiktokPkceFile);
+      if (
+        query.error ||
+        !query.code ||
+        !pending ||
+        !query.state ||
+        query.state !== pending.state
+      ) {
         return reply.redirect(`${config.webOrigin}/?tiktok=error`);
       }
-      const body = new URLSearchParams({
+      const body = toFormBody({
         client_key: config.tiktokClientKey,
         client_secret: config.tiktokClientSecret,
         code: query.code,
         grant_type: "authorization_code",
         redirect_uri: config.tiktokRedirectUri,
+        code_verifier: pending.codeVerifier,
       });
       const response = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
         method: "POST",
@@ -117,7 +159,11 @@ export function registerTiktokAuth(app: FastifyInstance): void {
       });
       const data = (await response.json()) as TiktokTokenResponse;
       if (!data.access_token) {
-        return reply.redirect(`${config.webOrigin}/?tiktok=error`);
+        const reason = tiktokErrorText(data);
+        request.log.error({ tiktokAuth: reason });
+        return reply.redirect(
+          `${config.webOrigin}/?tiktok=error&reason=${encodeURIComponent(reason)}`
+        );
       }
       await writeJsonFile(paths.tiktokTokenFile, toTiktokTokens(data));
       return reply.redirect(`${config.webOrigin}/?tiktok=connected`);

@@ -34,6 +34,8 @@ export const StatusBar: FC<StatusBarProps> = ({ status, onRefresh }) => {
       <StatusDot ok={status.ytdlp} label="yt-dlp" />
       <StatusDot ok={status.ollama} label="Ollama" />
       <StatusDot ok={status.worker} label="Воркер" />
+      <StatusDot ok={status.studioWorker} label="Студия" />
+
       {status.youtube ? (
         <button
           type="button"

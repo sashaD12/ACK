@@ -46,7 +46,7 @@ if not exist "node_modules\@narezchik\shared\src\index.ts" (
   )
 )
 
-echo Запускаю веб, API и воркер...
+echo Запускаю веб, API, воркер нарезки и студию...
 echo Интерфейс: http://localhost:5173
 start "" cmd /c "timeout /t 4 /nobreak >nul & start http://localhost:5173"
 call npm run dev

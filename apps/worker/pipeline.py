@@ -6,11 +6,11 @@ from typing import Any
 
 from ads import detect_ads
 from captions import words_in_range, write_ass
-from crop import crop_for_clip
+from crop import caption_margin_v, crop_for_clip, face_layout
 from highlights import select_highlights
 from job_io import jobs_dir, save_job, update_job
 from metadata import generate_metadata
-from render import render_clip
+from render import RENDER_STYLE, render_clip
 from thumbnail import make_thumbnails
 from transcribe import flatten_words, transcribe_video, transcript_window
 
@@ -58,6 +58,8 @@ def reusable_clip(
             continue
         if not same_range:
             continue
+        if item.get("renderStyle") != RENDER_STYLE:
+            continue
         if clip_outputs_exist(clips_dir, item, cid):
             return item
     return None
@@ -78,13 +80,20 @@ def process_job(job: dict[str, Any]) -> None:
     language = str(settings.get("language") or "ru")
     whisper_model = str(settings.get("whisperModel") or "small")
     ollama_model = str(settings.get("ollamaModel") or "qwen2.5:7b")
-    min_duration = float(settings.get("clipMinDuration") or 15)
-    max_duration = float(settings.get("clipMaxDuration") or 60)
-    max_clips = int(settings.get("maxClips") or 5)
+    min_duration = float(settings.get("clipMinDuration") or 18)
+    max_duration = float(settings.get("clipMaxDuration") or 180)
+    max_clips = int(settings.get("maxClips") or 12)
     platforms = settings.get("platforms") or ["youtube", "tiktok"]
     skip_ads = settings.get("skipAds")
     if skip_ads is None:
         skip_ads = True
+    add_music = settings.get("addMusic")
+    if add_music is None:
+        add_music = False
+    montage = settings.get("montage")
+    if montage is None:
+        montage = True
+    max_publish = int(settings.get("maxPublishPerRun") or 2)
 
     transcript_path = directory / "transcript.json"
     saved_transcript = load_saved_json(transcript_path)
@@ -119,7 +128,14 @@ def process_job(job: dict[str, Any]) -> None:
             )
     highlights_path = directory / "highlights.json"
     saved_highlights = load_saved_json(highlights_path)
-    if isinstance(saved_highlights, list) and saved_highlights:
+    highlights_ok = (
+        isinstance(saved_highlights, list)
+        and bool(saved_highlights)
+        and all(
+            isinstance(item, dict) and "score" in item for item in saved_highlights
+        )
+    )
+    if highlights_ok:
         highlights = saved_highlights
         print(f"[{job_id}] highlights exist, skip Ollama", flush=True)
     else:
@@ -146,6 +162,7 @@ def process_job(job: dict[str, Any]) -> None:
 
     existing_clips = [item for item in (job.get("clips") or []) if isinstance(item, dict)]
     clips: list[dict[str, Any]] = []
+    used_titles: list[str] = []
     total = len(highlights)
     for index, highlight in enumerate(highlights):
         start = float(highlight["start"])
@@ -158,6 +175,12 @@ def process_job(job: dict[str, Any]) -> None:
         )
         ready = reusable_clip(existing_clips, cid, start, end, clips_dir)
         if ready is not None:
+            ready = dict(ready)
+            ready["score"] = float(highlight.get("score") or ready.get("score") or 0)
+            ready["renderStyle"] = RENDER_STYLE
+            title = str((ready.get("youtube") or {}).get("title") or "")
+            if title:
+                used_titles.append(title)
             clips.append(ready)
             job["clips"] = clips
             save_job(job)
@@ -166,9 +189,16 @@ def process_job(job: dict[str, Any]) -> None:
         print(f"[{job_id}] render {cid} {start:.1f}-{end:.1f}", flush=True)
         text = transcript_window(words, start, end)
         hook = str(highlight.get("hook") or text[:80] or "Клип")
-        meta = generate_metadata(ollama_model, text, hook)
+        meta = generate_metadata(ollama_model, text, hook, used_titles)
+        used_titles.append(str(meta["youtube"]["title"]))
+        _face_x, face_y = face_layout(source_path, start, end)
         ass_path = clips_dir / f"{cid}.ass"
-        write_ass(ass_path, words_in_range(words, start, end))
+        write_ass(
+            ass_path,
+            words_in_range(words, start, end),
+            hook,
+            margin_v=caption_margin_v(face_y),
+        )
         crop_w, crop_h, crop_x, crop_y = crop_for_clip(source_path, start, end)
         video_name = f"{cid}.mp4"
         thumb_v = f"{cid}-thumb.jpg"
@@ -184,6 +214,9 @@ def process_job(job: dict[str, Any]) -> None:
             crop_x,
             crop_y,
             ass_path,
+            clip_id=cid,
+            add_music=bool(add_music),
+            montage=bool(montage),
         )
         make_thumbnails(
             video_path,
@@ -201,25 +234,47 @@ def process_job(job: dict[str, Any]) -> None:
                 "hook": hook,
                 "reason": str(highlight.get("reason") or ""),
                 "transcript": text,
+                "score": float(highlight.get("score") or 0),
+                "renderStyle": RENDER_STYLE,
                 "youtube": meta["youtube"],
                 "tiktok": meta["tiktok"],
                 "videoFile": f"clips/{video_name}",
                 "thumbVerticalFile": f"clips/{thumb_v}",
                 "thumbHorizontalFile": f"clips/{thumb_h}",
-                "publishYoutube": "youtube" in platforms,
-                "publishTiktok": "tiktok" in platforms,
+                "publishYoutube": False,
+                "publishTiktok": False,
                 "youtubeVideoId": None,
                 "tiktokPublishId": None,
+                "youtubeError": None,
+                "tiktokError": None,
                 "publishError": None,
+                "scheduledYoutubeAt": None,
+                "scheduledTiktokAt": None,
+                "youtubePublishedAt": None,
+                "youtubeStats": None,
             }
         )
         job["clips"] = clips
         save_job(job)
 
+    ranked = sorted(
+        range(len(clips)),
+        key=lambda index: -float(clips[index].get("score") or 0),
+    )
+    selected = set(ranked[: max(1, max_publish)])
+    for index, clip in enumerate(clips):
+        is_top = index in selected
+        clip["publishYoutube"] = is_top and "youtube" in platforms
+        clip["publishTiktok"] = is_top and "tiktok" in platforms
+        if clip.get("score") is None:
+            clip["score"] = 0
+        if "renderStyle" not in clip:
+            clip["renderStyle"] = RENDER_STYLE
+
     update_job(
         job,
         status="ready",
-        progress=f"Готово: {len(clips)} клипов",
+        progress=f"Готово: {len(clips)} клипов, к публикации {len(selected)}",
         clips=clips,
         error=None,
     )

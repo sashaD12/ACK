@@ -34,8 +34,13 @@ def now_iso() -> str:
 def read_json(path: Path) -> dict[str, Any] | None:
     if not path.exists():
         return None
-    with path.open("r", encoding="utf-8") as handle:
-        data = json.load(handle)
+    try:
+        raw = path.read_text(encoding="utf-8")
+        if not raw.strip():
+            return None
+        data = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        return None
     if isinstance(data, dict):
         return data
     return None

@@ -1,4 +1,10 @@
-import type { Clip, Job, JobSettings, SystemStatus } from "@narezchik/shared";
+import type {
+  Clip,
+  Job,
+  JobSettings,
+  Platform,
+  SystemStatus,
+} from "@narezchik/shared";
 
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -80,13 +86,28 @@ export async function updateClip(
   return parseResponse<Clip>(response);
 }
 
-export async function publishJob(jobId: string, clipIds: string[]): Promise<Job> {
+export async function publishJob(
+  jobId: string,
+  clipIds: string[],
+  platform: Platform
+): Promise<Job> {
   const response = await fetch(`/api/jobs/${jobId}/publish`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ clipIds }),
+    body: JSON.stringify({ clipIds, platform }),
+  });
+  return parseResponse<Job>(response);
+}
+
+export async function refreshJobStats(jobId: string): Promise<Job> {
+  const response = await fetch(`/api/jobs/${jobId}/stats`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: "{}",
   });
   return parseResponse<Job>(response);
 }

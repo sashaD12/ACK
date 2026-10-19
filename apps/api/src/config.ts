@@ -41,8 +41,12 @@ export const config = {
 
 export const paths = {
   jobsDir: path.join(config.dataDir, "jobs"),
+  studioJobsDir: path.join(config.dataDir, "studio", "jobs"),
+  studioDir: path.join(config.dataDir, "studio"),
   authDir: path.join(config.dataDir, "auth"),
   heartbeatFile: path.join(config.dataDir, "worker-heartbeat.json"),
+  studioHeartbeatFile: path.join(config.dataDir, "studio-worker-heartbeat.json"),
   youtubeTokenFile: path.join(config.dataDir, "auth", "youtube.json"),
   tiktokTokenFile: path.join(config.dataDir, "auth", "tiktok.json"),
+  tiktokPkceFile: path.join(config.dataDir, "auth", "tiktok-pkce.json"),
 };

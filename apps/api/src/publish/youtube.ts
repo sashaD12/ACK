@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { google } from "googleapis";
-import type { Clip } from "@narezchik/shared";
+import type { Clip, ClipStats, YoutubePrivacy } from "@narezchik/shared";
 import { getYoutubeAuth } from "../auth/youtube.ts";
 import { resolveJobPath } from "../jobs/store.ts";
 
@@ -49,9 +49,17 @@ export function youtubePublishErrorMessage(error: unknown): string {
   return parsed.message;
 }
 
+function normalizePrivacy(value: YoutubePrivacy | undefined): YoutubePrivacy {
+  if (value === "unlisted" || value === "private" || value === "public") {
+    return value;
+  }
+  return "public";
+}
+
 export async function publishClipToYoutube(
   jobId: string,
-  clip: Clip
+  clip: Clip,
+  privacy: YoutubePrivacy = "public"
 ): Promise<string> {
   const auth = await getYoutubeAuth();
   if (!auth) {
@@ -72,7 +80,7 @@ export async function publishClipToYoutube(
         categoryId: "22",
       },
       status: {
-        privacyStatus: "public",
+        privacyStatus: normalizePrivacy(privacy),
         selfDeclaredMadeForKids: false,
       },
     },
@@ -85,4 +93,39 @@ export async function publishClipToYoutube(
     throw new Error("YouTube did not return a video id");
   }
   return videoId;
+}
+
+export async function fetchYoutubeStats(
+  videoIds: string[]
+): Promise<Map<string, ClipStats>> {
+  const result = new Map<string, ClipStats>();
+  const unique = [...new Set(videoIds.filter((id) => id.length > 0))];
+  if (unique.length === 0) {
+    return result;
+  }
+  const auth = await getYoutubeAuth();
+  if (!auth) {
+    throw new Error("YouTube is not connected");
+  }
+  const youtube = google.youtube({ version: "v3", auth });
+  const fetchedAt = new Date().toISOString();
+  for (let index = 0; index < unique.length; index += 40) {
+    const chunk = unique.slice(index, index + 40);
+    const response = await youtube.videos.list({
+      part: ["statistics"],
+      id: chunk,
+    });
+    for (const item of response.data.items ?? []) {
+      if (!item.id) {
+        continue;
+      }
+      result.set(item.id, {
+        views: Number(item.statistics?.viewCount ?? 0),
+        likes: Number(item.statistics?.likeCount ?? 0),
+        comments: Number(item.statistics?.commentCount ?? 0),
+        fetchedAt,
+      });
+    }
+  }
+  return result;
 }

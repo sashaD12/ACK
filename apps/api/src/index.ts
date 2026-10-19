@@ -8,6 +8,8 @@ import { registerJobRoutes } from "./jobs/routes.ts";
 import { resumeStuckDownloads } from "./jobs/source-download.ts";
 import { ensureDataDirs } from "./jobs/store.ts";
 import { registerPublishRoutes } from "./publish/routes.ts";
+import { startPublishScheduler } from "./publish/scheduler.ts";
+import { registerStudioRoutes } from "./studio/routes.ts";
 import { getSystemStatus } from "./system.ts";
 
 async function start(): Promise<void> {
@@ -32,11 +34,13 @@ async function start(): Promise<void> {
 
   registerJobRoutes(app);
   registerPublishRoutes(app);
+  registerStudioRoutes(app);
   registerYoutubeAuth(app);
   registerTiktokAuth(app);
 
   await app.listen({ port: config.port, host: "0.0.0.0" });
   void resumeStuckDownloads();
+  startPublishScheduler();
 }
 
 start().catch((error: unknown) => {

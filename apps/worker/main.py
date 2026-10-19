@@ -45,7 +45,12 @@ def main() -> None:
     thread.start()
     print("Narezchik worker started", flush=True)
     while True:
-        queued = list_queued_jobs()
+        try:
+            queued = list_queued_jobs()
+        except Exception:
+            traceback.print_exc()
+            time.sleep(2)
+            continue
         if not queued:
             time.sleep(2)
             continue

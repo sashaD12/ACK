@@ -9,6 +9,7 @@ import {
   type Job,
   type JobSettings,
   type Platform,
+  type YoutubePrivacy,
 } from "@narezchik/shared";
 import { config } from "../config.ts";
 import {
@@ -34,6 +35,13 @@ interface ClipPatch {
   publishTiktok?: boolean;
 }
 
+function normalizePrivacy(value: YoutubePrivacy | undefined): YoutubePrivacy {
+  if (value === "public" || value === "unlisted" || value === "private") {
+    return value;
+  }
+  return DEFAULT_JOB_SETTINGS.youtubePrivacy;
+}
+
 function mergeSettings(input: Partial<JobSettings> | undefined): JobSettings {
   const platforms: Platform[] =
     input?.platforms && input.platforms.length > 0
@@ -48,6 +56,13 @@ function mergeSettings(input: Partial<JobSettings> | undefined): JobSettings {
     ollamaModel: input?.ollamaModel ?? config.ollamaModel,
     platforms,
     skipAds: input?.skipAds ?? DEFAULT_JOB_SETTINGS.skipAds,
+    addMusic: input?.addMusic ?? DEFAULT_JOB_SETTINGS.addMusic,
+    montage: input?.montage ?? DEFAULT_JOB_SETTINGS.montage,
+    maxPublishPerRun:
+      input?.maxPublishPerRun ?? DEFAULT_JOB_SETTINGS.maxPublishPerRun,
+    publishDelayHours:
+      input?.publishDelayHours ?? DEFAULT_JOB_SETTINGS.publishDelayHours,
+    youtubePrivacy: normalizePrivacy(input?.youtubePrivacy),
   };
 }
 

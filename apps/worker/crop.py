@@ -44,7 +44,7 @@ def _get_detector():
     return _detector
 
 
-def _detect_face_x(image_path: Path) -> float | None:
+def detect_face_xy(image_path: Path) -> tuple[float, float] | None:
     try:
         detector = _get_detector()
         import mediapipe as mp
@@ -57,6 +57,7 @@ def _detect_face_x(image_path: Path) -> float | None:
         if not detections:
             return None
         width = image.width
+        height = image.height
         best = max(
             detections,
             key=lambda item: (
@@ -66,18 +67,30 @@ def _detect_face_x(image_path: Path) -> float | None:
             ),
         )
         box = best.bounding_box
-        if box is None or width <= 0:
+        if box is None or width <= 0 or height <= 0:
             return None
-        center = box.origin_x + box.width / 2
-        return min(1.0, max(0.0, float(center) / float(width)))
+        center_x = box.origin_x + box.width / 2
+        center_y = box.origin_y + box.height / 2
+        return (
+            min(1.0, max(0.0, float(center_x) / float(width))),
+            min(1.0, max(0.0, float(center_y) / float(height))),
+        )
     except Exception:
         return None
 
 
-def face_center_ratio(source_path: Path, start: float, end: float) -> float:
+def _detect_face_x(image_path: Path) -> float | None:
+    point = detect_face_xy(image_path)
+    if point is None:
+        return None
+    return point[0]
+
+
+def face_layout(source_path: Path, start: float, end: float) -> tuple[float, float]:
     samples = 8
     duration = max(0.1, end - start)
     xs: list[float] = []
+    ys: list[float] = []
     tmp_dir = source_path.parent / "tmp_frames"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     for index in range(samples):
@@ -85,15 +98,22 @@ def face_center_ratio(source_path: Path, start: float, end: float) -> float:
         frame_path = tmp_dir / f"face-{index}.jpg"
         try:
             extract_frame(source_path, seconds, frame_path)
-            center = _detect_face_x(frame_path)
-            if center is not None:
-                xs.append(min(1.0, max(0.0, center)))
+            point = detect_face_xy(frame_path)
+            if point is not None:
+                xs.append(min(1.0, max(0.0, point[0])))
+                ys.append(min(1.0, max(0.0, point[1])))
         except Exception:
             continue
     if not xs:
-        return 0.5
+        return 0.5, 0.42
     xs.sort()
-    return xs[len(xs) // 2]
+    ys.sort()
+    return xs[len(xs) // 2], ys[len(ys) // 2]
+
+
+def face_center_ratio(source_path: Path, start: float, end: float) -> float:
+    center_x, _center_y = face_layout(source_path, start, end)
+    return center_x
 
 
 def compute_crop(
@@ -129,3 +149,11 @@ def crop_for_clip(source_path: Path, start: float, end: float) -> tuple[int, int
     width, height, _duration = probe_size(source_path)
     center = face_center_ratio(source_path, start, end)
     return compute_crop(width, height, center)
+
+
+def caption_margin_v(face_y_ratio: float) -> int:
+    if face_y_ratio >= 0.62:
+        return 520
+    if face_y_ratio >= 0.48:
+        return 380
+    return 240

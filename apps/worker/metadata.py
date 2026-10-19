@@ -7,7 +7,7 @@ from ollama_client import generate_json
 
 def fallback_metadata(text: str, hook: str) -> dict[str, Any]:
     clean = (hook or text or "Новый клип").strip()
-    title = clean[:96]
+    title = clean[:70]
     tags = ["shorts", "tiktok", "viral", "нарезка"]
     for token in text.replace(",", " ").split():
         token = token.strip("#").lower()
@@ -19,7 +19,7 @@ def fallback_metadata(text: str, hook: str) -> dict[str, Any]:
     return {
         "youtube": {
             "title": title,
-            "description": f"{text[:800]}\n\n#Shorts",
+            "description": f"{text[:500].strip()}\n\n#Shorts #shorts",
             "tags": tags[:15],
         },
         "tiktok": {
@@ -28,13 +28,26 @@ def fallback_metadata(text: str, hook: str) -> dict[str, Any]:
     }
 
 
-def generate_metadata(model: str, text: str, hook: str) -> dict[str, Any]:
+def generate_metadata(
+    model: str,
+    text: str,
+    hook: str,
+    used_titles: list[str] | None = None,
+) -> dict[str, Any]:
+    used = used_titles or []
+    avoid = ""
+    if used:
+        avoid = "Не повторяй эти title: " + " | ".join(used[:8]) + ".\n"
     prompt = (
         "Ты автор описаний для вирусных Shorts и TikTok. "
         "По тексту клипа сделай метаданные.\n"
         "Верни JSON: {\"youtube\":{\"title\":\"...\",\"description\":\"...\",\"tags\":[\"a\",\"b\"]},\"tiktok\":{\"caption\":\"...\"}}\n"
-        "title до 90 символов, цепляющий, без кавычек. description 1-3 предложения + хештеги и #Shorts. "
-        "tags 8-15 слов. tiktok.caption — 1-2 предложения и 5-10 хештегов. Язык как в тексте.\n"
+        "title до 70 символов, любопытный хук, без кавычек и без #Shorts в title. "
+        "Первые слова title должны совпадать с тем, что зритель слышит в первые 3 секунды. "
+        "Каждый title должен быть уникальным по смыслу. "
+        "description 1-2 предложения + хештеги и обязательно #Shorts. "
+        "tags 8-15 слов. tiktok.caption — 1 предложение и 5-8 хештегов. Язык как в тексте.\n"
+        f"{avoid}"
         f"Хук: {hook}\nТекст клипа:\n{text[:4000]}"
     )
     try:
@@ -46,9 +59,12 @@ def generate_metadata(model: str, text: str, hook: str) -> dict[str, Any]:
         tags_raw = youtube.get("tags") or []
         tags = [str(tag).strip() for tag in tags_raw if str(tag).strip()]
         title = str(youtube.get("title") or hook or "Клип")[:100]
+        lower_used = {item.lower() for item in used}
+        if title.lower() in lower_used and hook:
+            title = hook[:70]
         description = str(youtube.get("description") or text)
-        if "#Shorts" not in description:
-            description = f"{description}\n\n#Shorts"
+        if "#Shorts" not in description and "#shorts" not in description:
+            description = f"{description.strip()}\n\n#Shorts"
         caption = str(tiktok.get("caption") or title)
         return {
             "youtube": {

@@ -115,8 +115,8 @@ def _run_whisper(
         language=whisper_language,
         word_timestamps=True,
         vad_filter=True,
-        beam_size=1,
-        best_of=1,
+        beam_size=3,
+        best_of=3,
         condition_on_previous_text=False,
     )
     segments: list[dict[str, Any]] = []

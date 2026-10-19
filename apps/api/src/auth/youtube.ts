@@ -8,7 +8,10 @@ import {
   type YoutubeTokens,
 } from "./tokens.ts";
 
-const SCOPES = ["https://www.googleapis.com/auth/youtube.upload"];
+const SCOPES = [
+  "https://www.googleapis.com/auth/youtube.upload",
+  "https://www.googleapis.com/auth/youtube.readonly",
+];
 
 export function createYoutubeOAuthClient() {
   return new google.auth.OAuth2(

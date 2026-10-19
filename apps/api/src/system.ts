@@ -28,8 +28,8 @@ async function isOllamaUp(): Promise<boolean> {
   }
 }
 
-async function isWorkerAlive(): Promise<boolean> {
-  const heartbeat = await readJsonFile<WorkerHeartbeat>(paths.heartbeatFile);
+async function isHeartbeatAlive(filePath: string): Promise<boolean> {
+  const heartbeat = await readJsonFile<WorkerHeartbeat>(filePath);
   if (!heartbeat) {
     return false;
   }
@@ -45,18 +45,21 @@ async function isYtdlpAvailable(): Promise<boolean> {
 }
 
 export async function getSystemStatus(): Promise<SystemStatus> {
-  const [ffmpeg, ollama, worker, ytdlp, youtube, tiktok] = await Promise.all([
-    canRun(config.ffmpegPath, ["-version"]),
-    isOllamaUp(),
-    isWorkerAlive(),
-    isYtdlpAvailable(),
-    isYoutubeConnected(),
-    isTiktokConnected(),
-  ]);
+  const [ffmpeg, ollama, worker, studioWorker, ytdlp, youtube, tiktok] =
+    await Promise.all([
+      canRun(config.ffmpegPath, ["-version"]),
+      isOllamaUp(),
+      isHeartbeatAlive(paths.heartbeatFile),
+      isHeartbeatAlive(paths.studioHeartbeatFile),
+      isYtdlpAvailable(),
+      isYoutubeConnected(),
+      isTiktokConnected(),
+    ]);
   return {
     ffmpeg,
     ollama,
     worker,
+    studioWorker,
     ytdlp,
     youtube,
     tiktok,

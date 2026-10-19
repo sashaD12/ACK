@@ -1,24 +1,47 @@
 import { useState, type FC } from "react";
-import type { Clip, SystemStatus } from "@narezchik/shared";
-import { mediaUrl, updateClip } from "../api";
+import {
+  formatScheduleLabel,
+  type Clip,
+  type Platform,
+  type SystemStatus,
+} from "@narezchik/shared";
+import { mediaUrl, publishJob, updateClip } from "../api";
 
 interface ClipCardProps {
   jobId: string;
   clip: Clip;
   status: SystemStatus | null;
+  canPublish: boolean;
   onChange: (clip: Clip) => void;
+  onJobChange: (jobId: string) => void;
 }
 
-export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) => {
+export const ClipCard: FC<ClipCardProps> = ({
+  jobId,
+  clip,
+  status,
+  canPublish,
+  onChange,
+  onJobChange,
+}) => {
   const [busy, setBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState<Platform | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function patch(
-    next: Partial<Pick<Clip, "hook" | "youtube" | "tiktok" | "publishYoutube" | "publishTiktok">>
+    next: Partial<
+      Pick<Clip, "hook" | "youtube" | "tiktok" | "publishYoutube" | "publishTiktok">
+    >
   ): Promise<void> {
     setBusy(true);
+    setError(null);
     try {
       const updated = await updateClip(jobId, clip.id, next);
       onChange(updated);
+    } catch (patchError) {
+      setError(
+        patchError instanceof Error ? patchError.message : "Не удалось сохранить"
+      );
     } finally {
       setBusy(false);
     }
@@ -28,8 +51,35 @@ export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) =
     await navigator.clipboard.writeText(clip.tiktok.caption);
   }
 
+  async function publishOne(platform: Platform): Promise<void> {
+    setPublishBusy(platform);
+    setError(null);
+    try {
+      await publishJob(jobId, [clip.id], platform);
+      onJobChange(jobId);
+    } catch (publishError) {
+      setError(
+        publishError instanceof Error ? publishError.message : "Ошибка публикации"
+      );
+    } finally {
+      setPublishBusy(null);
+    }
+  }
+
   const videoSrc = mediaUrl(jobId, clip.videoFile);
   const thumbSrc = mediaUrl(jobId, clip.thumbVerticalFile);
+  const youtubeSchedule = formatScheduleLabel(clip.scheduledYoutubeAt);
+  const tiktokSchedule = formatScheduleLabel(clip.scheduledTiktokAt);
+  const canYoutube =
+    canPublish &&
+    clip.publishYoutube &&
+    !clip.youtubeVideoId &&
+    publishBusy === null;
+  const canTiktok =
+    canPublish &&
+    clip.publishTiktok &&
+    !clip.tiktokPublishId &&
+    publishBusy === null;
 
   return (
     <article className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/80">
@@ -42,8 +92,33 @@ export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) =
             className="aspect-[9/16] w-full rounded-xl bg-black object-cover"
           />
           <p className="mt-2 text-xs text-zinc-500">
-            {clip.start.toFixed(1)}с — {clip.end.toFixed(1)}с · {clip.reason}
+            {(clip.end - clip.start).toFixed(0)}с · {clip.start.toFixed(1)}–
+            {clip.end.toFixed(1)}с · хук {Math.round(clip.score ?? 0)}
           </p>
+          <p className="text-xs text-zinc-500">{clip.reason}</p>
+          {clip.publishYoutube && !clip.youtubeVideoId ? (
+            <p className="mt-1 text-xs font-medium text-red-300">
+              {youtubeSchedule
+                ? `YouTube: ${youtubeSchedule}`
+                : "YouTube в очереди"}
+            </p>
+          ) : null}
+          {clip.publishTiktok && !clip.tiktokPublishId ? (
+            <p className="mt-1 text-xs font-medium text-cyan-300">
+              {tiktokSchedule
+                ? `TikTok: ${tiktokSchedule}`
+                : "TikTok в очереди"}
+            </p>
+          ) : null}
+          {!clip.publishYoutube && !clip.publishTiktok ? (
+            <p className="mt-1 text-xs text-zinc-500">Запас — выложить позже</p>
+          ) : null}
+          {clip.youtubeStats ? (
+            <p className="mt-2 text-xs text-emerald-300">
+              YT: {clip.youtubeStats.views} просм. · {clip.youtubeStats.likes}{" "}
+              лайк · {clip.youtubeStats.comments} комм.
+            </p>
+          ) : null}
         </div>
         <div className="space-y-3">
           <label className="block text-xs text-zinc-400">
@@ -121,6 +196,10 @@ export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) =
               className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
             />
           </label>
+          <p className="text-xs text-zinc-500">
+            TikTok inbox: подпись API не передаёт — скопируйте caption и дожмите
+            в приложении после загрузки.
+          </p>
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <label className="flex items-center gap-2 text-zinc-300">
               <input
@@ -158,6 +237,26 @@ export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) =
             >
               Копировать caption
             </button>
+            <button
+              type="button"
+              disabled={!canYoutube}
+              onClick={() => {
+                void publishOne("youtube");
+              }}
+              className="rounded-lg border border-red-500/50 px-3 py-1 text-xs text-red-200 hover:border-red-400 disabled:opacity-40"
+            >
+              {publishBusy === "youtube" ? "YouTube..." : "Только YouTube"}
+            </button>
+            <button
+              type="button"
+              disabled={!canTiktok}
+              onClick={() => {
+                void publishOne("tiktok");
+              }}
+              className="rounded-lg border border-cyan-500/50 px-3 py-1 text-xs text-cyan-200 hover:border-cyan-400 disabled:opacity-40"
+            >
+              {publishBusy === "tiktok" ? "TikTok..." : "Только TikTok"}
+            </button>
           </div>
           {!status?.tiktokConfigured && clip.publishTiktok ? (
             <p className="text-xs text-amber-300">
@@ -171,10 +270,18 @@ export const ClipCard: FC<ClipCardProps> = ({ jobId, clip, status, onChange }) =
           ) : null}
           {clip.tiktokPublishId ? (
             <p className="text-xs text-emerald-400">
-              TikTok inbox: {clip.tiktokPublishId}
+              TikTok inbox: {clip.tiktokPublishId} — откройте приложение и
+              добавьте caption.
             </p>
           ) : null}
-          {clip.publishError ? (
+          {error ? <p className="text-xs text-red-400">{error}</p> : null}
+          {clip.youtubeError ? (
+            <p className="text-xs text-red-400">YouTube: {clip.youtubeError}</p>
+          ) : null}
+          {clip.tiktokError ? (
+            <p className="text-xs text-red-400">TikTok: {clip.tiktokError}</p>
+          ) : null}
+          {!clip.youtubeError && !clip.tiktokError && clip.publishError ? (
             <p className="text-xs text-red-400">{clip.publishError}</p>
           ) : null}
         </div>

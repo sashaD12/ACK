@@ -14,6 +14,7 @@ export function jobFile(jobId: string): string {
 export async function ensureDataDirs(): Promise<void> {
   await fs.mkdir(paths.jobsDir, { recursive: true });
   await fs.mkdir(paths.authDir, { recursive: true });
+  await fs.mkdir(paths.studioJobsDir, { recursive: true });
 }
 
 export async function writeJob(job: Job): Promise<void> {
@@ -24,7 +25,16 @@ export async function writeJob(job: Job): Promise<void> {
   const dir = jobDir(job.id);
   await fs.mkdir(dir, { recursive: true });
   await fs.mkdir(path.join(dir, "clips"), { recursive: true });
-  await fs.writeFile(jobFile(job.id), JSON.stringify(next, null, 2), "utf8");
+  const file = jobFile(job.id);
+  const tmp = `${file}.tmp`;
+  const body = JSON.stringify(next, null, 2);
+  await fs.writeFile(tmp, body, "utf8");
+  try {
+    await fs.rename(tmp, file);
+  } catch {
+    await fs.writeFile(file, body, "utf8");
+    await fs.rm(tmp, { force: true });
+  }
 }
 
 export async function readJob(jobId: string): Promise<Job | null> {

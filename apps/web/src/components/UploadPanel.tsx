@@ -1,5 +1,10 @@
 import { useState, type ChangeEvent, type FC, type FormEvent } from "react";
-import { DEFAULT_JOB_SETTINGS, type JobSettings, type Platform } from "@narezchik/shared";
+import {
+  DEFAULT_JOB_SETTINGS,
+  type JobSettings,
+  type Platform,
+  type YoutubePrivacy,
+} from "@narezchik/shared";
 import { createJobFromFile, createJobFromUrl } from "../api";
 
 interface UploadPanelProps {
@@ -114,7 +119,7 @@ export const UploadPanel: FC<UploadPanelProps> = ({ onCreated }) => {
           <input
             type="number"
             min={1}
-            max={12}
+            max={20}
             value={settings.maxClips}
             onChange={(event) => {
               setSettings({ ...settings, maxClips: Number(event.target.value) });
@@ -161,8 +166,57 @@ export const UploadPanel: FC<UploadPanelProps> = ({ onCreated }) => {
             className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
           />
         </label>
+        <label className="text-sm text-zinc-300">
+          За публикацию
+          <input
+            type="number"
+            min={1}
+            max={3}
+            value={settings.maxPublishPerRun}
+            onChange={(event) => {
+              setSettings({
+                ...settings,
+                maxPublishPerRun: Number(event.target.value),
+              });
+            }}
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="text-sm text-zinc-300">
+          Пауза между пачками, ч
+          <input
+            type="number"
+            min={1}
+            max={48}
+            value={settings.publishDelayHours}
+            onChange={(event) => {
+              setSettings({
+                ...settings,
+                publishDelayHours: Number(event.target.value),
+              });
+            }}
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="text-sm text-zinc-300">
+          YouTube privacy
+          <select
+            value={settings.youtubePrivacy}
+            onChange={(event) => {
+              setSettings({
+                ...settings,
+                youtubePrivacy: event.target.value as YoutubePrivacy,
+              });
+            }}
+            className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm"
+          >
+            <option value="public">public</option>
+            <option value="unlisted">unlisted</option>
+            <option value="private">private</option>
+          </select>
+        </label>
       </div>
-      <div className="mt-3 flex gap-4 text-sm text-zinc-300">
+      <div className="mt-3 flex flex-wrap gap-4 text-sm text-zinc-300">
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
@@ -198,6 +252,26 @@ export const UploadPanel: FC<UploadPanelProps> = ({ onCreated }) => {
             }}
           />
           Вирізати рекламу автора
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={settings.addMusic}
+            onChange={(event) => {
+              setSettings({ ...settings, addMusic: event.target.checked });
+            }}
+          />
+          Музыка под речь
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={settings.montage}
+            onChange={(event) => {
+              setSettings({ ...settings, montage: event.target.checked });
+            }}
+          />
+          Монтаж Shorts
         </label>
       </div>
       {error ? <p className="mt-3 text-sm text-red-400">{error}</p> : null}
